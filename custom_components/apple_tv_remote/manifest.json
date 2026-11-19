@@ -1,0 +1,21 @@
+{
+  "domain": "apple_tv_remote",
+  "name": "Apple TV Remote",
+  "codeowners": [
+    "@vandalon"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "apple_tv",
+    "http",
+    "frontend",
+    "websocket_api"
+  ],
+  "documentation": "https://github.com/vandalon/ha-apple-tv-remote",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/vandalon/ha-apple-tv-remote/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "1.0.0"
+}

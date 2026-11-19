@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Apple TV Remote",
+        "description": "Adds the `custom:atv-touchpad` card. Needs the core Apple TV integration. Nothing to configure here: pick the Apple TV in the card."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Apple TV Remote is already set up."
+    }
+  }
+}
