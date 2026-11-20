@@ -52,19 +52,26 @@ entity: media_player.living_room_apple_tv
 The card finds the remote entity, config entry and keyboard-focus sensor of the same device itself. Editor → *App tiles →
 Check setup* shows what it found.
 
-What I run on a phone (the hero image, left):
+What I run on a phone (the hero image):
 
 ```yaml
 type: custom:atv-touchpad
 entity: media_player.living_room_apple_tv
-source_rows: 2
+source_rows: 4
+app_names: false        # icons only
 player_buttons: true    # 10 s back, info, 10 s forward
 edge_arrows: false      # every tap is select
 swipe_hold: false
+swipe_sensitivity: 1.5
 logo_text: tv
 volume_row: top
 power_position: bottom
+nav_order: home,back,play
 pad_ratio: 1.15
+side_padding: 0         # edge to edge: the card sits in a pop-up with its own frame
+top_padding: 0
+bottom_padding: 0
+show_border: false
 ```
 
 ## How it works
@@ -164,13 +171,17 @@ works) to whole-tile images: this build embeds tvOS-style tiles for them (`STOCK
 
 ### Editor
 
+Every option except the per-app maps (`circle_turn_apps`, `hold_profiles`) is in the visual editor (*Edit card*): layout and
+buttons on top, then *App tiles*, *Touchpad* (swipe and hold, circle scrubbing, player buttons) and *Advanced* (remote and
+keyboard sensor, found automatically). Only changed options are saved to YAML.
+
 ![Editor](images/editor.png)
 
-Every option except the per-app maps (`circle_turn_apps`, `hold_profiles`) is in the visual editor. *App tiles* has drag to
-reorder, the eye to hide, **Select** for bulk hide / show, **Show all apps again** and **Check setup**. Only changed options are
-saved to YAML.
+*App tiles* lists the apps your Apple TV reports: drag to reorder, the eye to hide, **Select** for bulk hide / show,
+**Show all apps again** and **Check setup**.
 
-![Select](images/editor-select.png)
+| ![App list](images/editor-apps.png) | ![Select](images/editor-select.png) |
+|---|---|
 
 ### Talking to the Apple TV
 
