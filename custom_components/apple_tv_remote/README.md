@@ -11,7 +11,7 @@ progress bar you can drag.
 It builds on the core `apple_tv` integration (pyatv). The card uses its remote / media player entities for the basics; the
 integration adds websocket commands for what core doesn't expose: touch events, held keys, skip, volume-based mute.
 
-![Apple TV Remote](images/hero.png?v=3)
+![Apple TV Remote](images/hero.png?v=4)
 
 <sub>Images are rendered from the card's own code with sample data, dark theme. The card follows your HA theme.</sub>
 
@@ -76,7 +76,7 @@ show_border: false
 
 ## How it works
 
-![Card](images/card.png?v=3)
+![Card](images/card.png?v=4)
 
 ### Touchpad
 
@@ -89,7 +89,7 @@ rewind). Moving the finger further out or back steps the speed up or down; what 
 
 ### Circle to scrub
 
-![Jog ring](images/card-ring.png?v=3)
+![Jog ring](images/card-ring.png?v=4)
 
 With `circle_scrub` on, a faint ring sits round the logo. Going round scrubs: clockwise forward, anticlockwise back, for as
 long as you keep turning.
@@ -124,24 +124,24 @@ to restore (`mute_hold`).
 
 ### Keyboard
 
-![Keyboard](images/card-keyboard.png?v=3)
+![Keyboard](images/card-keyboard.png?v=4)
 
 The core integration has a *Keyboard focus* binary sensor (often hidden). When it turns on, the text box opens and input
 goes straight to the Apple TV. The keyboard button toggles it by hand when focus isn't reported.
 
 ### Quick settings
 
-![Settings](images/card-settings.png?v=3)
+![Settings](images/card-settings.png?v=4)
 
 The cogwheel on the pad: swipe sensitivity, circle speed / acceleration per app (applies to the app on screen, or to all
 apps when none is open), skip seconds, haptics, tile rows, app names, and the app list (show / hide, drag to reorder,
 rename). Changes are written back to the card's config on the dashboard, so they apply to everyone. Admins only.
 
-![App settings](images/card-settings-apps.png?v=3)
+![App settings](images/card-settings-apps.png?v=4)
 
 ### App tiles
 
-![Tiles](images/tiles.png?v=3)
+![Tiles](images/tiles.png?v=4)
 
 - One tile per app the Apple TV reports. More than fit (`tiles_across` × `source_rows`) go on pages; a swipe moves one page.
 - `source_order` is both filter and order. Empty = all.
@@ -175,12 +175,12 @@ Every option except the per-app maps (`circle_turn_apps`, `hold_profiles`) is in
 buttons on top, then *App tiles*, *Touchpad* (swipe and hold, circle scrubbing, player buttons) and *Advanced* (remote and
 keyboard sensor, found automatically). Only changed options are saved to YAML.
 
-![Editor](images/editor.png?v=3)
+![Editor](images/editor.png?v=4)
 
 *App tiles* lists the apps your Apple TV reports: drag to reorder, the eye to hide, **Select** for bulk hide / show,
 **Show all apps again** and **Check setup**.
 
-| ![App list](images/editor-apps.png?v=3) | ![Select](images/editor-select.png?v=3) |
+| ![App list](images/editor-apps.png?v=4) | ![Select](images/editor-select.png?v=4) |
 |---|---|
 
 ### Talking to the Apple TV
