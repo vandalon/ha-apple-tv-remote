@@ -25,7 +25,7 @@ from homeassistant.helpers import entity_registry as er
 from .logic import CARD_TOUCH, HOLD_KEYS, TOUCH_AXES, TOUCH_MODES, TOUCH_RING_RANGE, clamp_coord, clamp_virtual, keyboard_sensor, sibling
 from .icons import ICON_DIR, ICON_URL, load_checked, load_index, lookup_icons, refresh_icons, save_checked, stale, store_icons
 from .raw import raw_session
-from .touch import KeyHold, TouchSession, companion_api, companion_key, replay
+from .touch import MUTE_HID, KeyHold, TouchSession, companion_api, companion_key, hid_press, replay
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -192,7 +192,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def ws_player(hass_, connection, msg):
         """The player buttons of Apple's Remote app. skip: jump `seconds` (negative = back) in the video on screen.
         captions: read the subtitle setting (no value) or set it (value); answers {"value": the setting before}.
-        mute: the Apple TV has no mute key: volume to 0 (the level before is remembered), or back to that level when it is 0; answers {"muted": bool}."""
+        mute: the Siri Remote's mute key (HID, over MRP: the TV / soundbar toggles mute; answers {"key": true}); without an MRP link
+        volume to 0 (the level before is remembered), or back to that level when it is 0; answers {"muted": bool}."""
         atv = _atv(hass_, msg["entity_id"])
         if atv is None:
             connection.send_error(msg["id"], "not_connected", "The Apple TV is not connected")
@@ -202,6 +203,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 sec = msg.get("seconds", 10.0)
                 await (atv.remote_control.skip_forward(sec) if sec >= 0 else atv.remote_control.skip_backward(-sec))
                 connection.send_result(msg["id"], {})
+                return
+            if msg["action"] == "mute" and await hid_press(atv, *MUTE_HID):
+                connection.send_result(msg["id"], {"key": True})
                 return
             from pyatv.protocols.companion.api import MediaControlCommand
             api = companion_api(atv)

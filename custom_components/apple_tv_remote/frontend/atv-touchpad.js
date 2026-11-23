@@ -12,9 +12,19 @@
      My app: { icon: mdi:rocket, color: "#107c10" }
    source_names: {}                  # your own name per app tile, app name -> name (the quick settings can set it per phone too)
    app_switcher: true                # button: double-press of the TV/home key (app switcher)
-   settings_button: true             # a cogwheel on the pad with quick settings (swipe sensitivity, circle speed, skip seconds, haptics, which apps show), kept per browser
+   settings_button: true             # a cogwheel on the pad with quick settings (swipe sensitivity, circle speed, skip seconds, volume hold, haptics, which apps show), saved in the card config
    skip_seconds: 10                  # player buttons: seconds per skip
-   mute_hold: true                   # hold volume down = mute, hold again = sound back (the Apple TV has no mute key: volume to 0 and back). Needs the integration
+   volume_entity: media_player.x     # optional: the media player for volume (soundbar, TV): its volume shows in the volume slider
+   volume_slider: true               # one volume button that opens a full-screen volume slider (needs a volume level). Default: on when volume_entity is set, else the - / + buttons
+   volume_repeat: true               # hold volume - / + to keep stepping the volume until you let go (only with mute_hold off)
+   volume_repeat_delay: 400          # volume hold: ms before the repeat starts
+   volume_repeat_ms: 200             # volume hold: ms between two repeats
+   volume_repeat_steps: 1            # volume hold: volume key presses per repeat (bigger jumps)
+   mute_hold: false                  # hold volume down = mute, as the mute button (then neither volume button repeats)
+   mute_button: true                 # a mute button in the volume row (mutes the Apple TV, or mute_entity when set)
+   mute_entity: media_player.x       # optional: what mute acts on: a media player (soundbar, TV: mute toggles), a remote (sends mute_command), a button / script (pressed / run)
+                                     # or a switch / input_boolean (toggled). Empty = the Apple TV: the Siri Remote's mute key (needs the integration)
+   mute_command: mute                # with a remote as mute_entity: the command it sends (for example KEY_MUTE, MUTE)
    volume_row: bottom                # bottom: the volume row is the last row; top: it sits just above the touchpad
    nav_order: [back, home, play]     # order of the back, TV / Home and play / pause buttons
    power_position: top               # top: power is the first button of the top row; bottom: the last of the volume row, in place of the app switcher
@@ -43,7 +53,6 @@
    bottom_padding: 12                # px of space below the last row (with screen_corners: as much as at the sides makes the corner curve concentric)
    app_icons: true                   # app tiles: the real icon of App Store apps (looked up by the integration on Apple's App Store) and colour plates for Apple's own apps; false = plain symbols
    logo_text: ''                     # a word after the Apple logo on the pad, for example tv
-   edge_arrows: true                 # false = no arrows on the pad and a tap near an edge is a plain select (navigate by swiping only)
    circle_scrub: true                # go round with your finger on the pad to scrub: clockwise = forward, as long as you keep turning (a ring round the logo shows it is on). Needs the integration
    ring_hold: 350                    # circle: ms the finger rests before circling to use the jog ring of Apple's player (the Apple TV app); a circle drawn right away is a sideways swipe
    ring_resume: true                 # circle: letting go after the jog ring plays the video again
@@ -60,11 +69,12 @@
    swipe_fast: 22                    # px per item when you swipe fast
    command_gap: 140                  # ms between two pad commands (the Apple TV drops commands that arrive faster)
    haptics: true                     # buzz on taps (HA app haptic event / navigator.vibrate)
-   show_border: true                 # false = no border / shadow around the card (for pop-ups and stacks that bring their own frame)
+   keep_screen_on: true              # phone/tablet screen stays on while the card is shown and the device is on (Screen Wake Lock)
+   style: card                       # card | flat (no border / shadow) | transparent (no background, see-through buttons: blends into a pop-up)
    height: auto                      # auto (default) = content-sized; or any CSS height (70vh, 100%): the pad then takes the spare space
    pad_ratio: 1.3                    # touchpad width : height when height is auto
-   Swipe = arrow keys (keeps repeating while you drag), tap = select, tap near an edge = that arrow.
-   Power: short press = control centre (the TV key held for 1 s), long press = sleep. The Apple TV has no mute key: holding volume down sets the volume to 0 and back (mute_hold). */
+   Swipe = arrow keys (keeps repeating while you drag), tap anywhere = select.
+   Power: short press = control centre (the TV key held for 1 s), long press = sleep. The Apple TV has no mute key: mute (mute_button / mute_hold) sends the Siri Remote's mute key, or mutes mute_entity. */
 // Built-in recognition of apps by name (first hit wins, English and Dutch names). Everything else gets a neutral icon.
 // MDI 7 dropped several brand icons (AirPlay, Amazon), so AirPlay is an inline path; everything else is a built-in mdi icon.
 const AIRPLAY = "M6,22H18L12,16M21,3H3A2,2 0 0,0 1,5V17A2,2 0 0,0 3,19H7V17H3V5H21V17H17V19H21A2,2 0 0,0 23,17V5A2,2 0 0,0 21,3Z";
@@ -80,6 +90,14 @@ const KNOWN = [   // [name regex, mdi icon, colour (null = own palette colour), 
   [/game|spel/i, "mdi:controller", null], [/browser|web|safari/i, "mdi:web", null],
 ];
 // Apps without a brand colour get their own stable colour from this palette (same name = same colour; neighbours never share one).
+// Card look (option style): card = normal HA card; flat = no border / shadow; transparent = no card background either, with see-through
+// controls so the card blends into a pop-up or blurred background. --rs = control surface; a theme or card_mod can set --remote-surface.
+const cardStyle = c => ["card", "flat", "transparent"].includes(c.style) ? c.style : (c.show_border === false ? "flat" : "card");   // show_border: false = legacy flat
+const STYLE_CSS = {
+  card: "--rs:var(--remote-surface,var(--secondary-background-color));",
+  flat: "border:none !important;box-shadow:none !important;--ha-card-border-width:0px;--rs:var(--remote-surface,var(--secondary-background-color));",
+  transparent: "background:none !important;border:none !important;box-shadow:none !important;--ha-card-border-width:0px;-webkit-backdrop-filter:none;backdrop-filter:none;--rs:var(--remote-surface,rgba(127,127,127,.14));",
+};
 const PALETTE = ["#ef5350", "#ff7043", "#ffa726", "#ffca28", "#9ccc65", "#26a69a", "#26c6da", "#42a5f5", "#5c6bc0", "#7e57c2", "#ab47bc", "#ec407a"];
 const hash = n => { let h = 5381; for (const ch of n) h = ((h << 5) + h + ch.charCodeAt(0)) >>> 0; return h; };
 const norm = n => String(n == null ? "" : n).replace(/ /g, " ").replace(/\s+/g, " ").trim();   // app names may contain non-breaking spaces
@@ -221,7 +239,6 @@ function logoSvg(svg, text) {
   svg.innerHTML = `<path fill="currentColor" d="${APPLE_PATH}"/>` + (tv ? TV_WORD : n ? `<text x="22" y="22.05" font-size="21.5" font-weight="600" font-family="-apple-system,system-ui,'Helvetica Neue',Arial,sans-serif" textLength="${w}" lengthAdjust="spacingAndGlyphs" fill="currentColor"></text>` : "");
   if (n && !tv) svg.querySelector("text").textContent = text;
 }
-const EDGE = 56;   // width (px) of the edge zone where a tap sends an arrow
 
 // Screen corner radius (pt = CSS px) per iPhone screen size ("short x long side", "@density" where two models share a size). A page cannot
 // read the model or its corner radius, but the screen size tells the family. Approximate; the cogwheel slider corrects it per screen size.
@@ -241,7 +258,7 @@ class AtvTouchpad extends HTMLElement {
     this._merge(c); this._build();
   }
   _merge(c) {   // the card's options with their defaults (this._c), from the raw options
-    this._c = { sources: true, app_switcher: true, volume: true, keyboard: true, haptics: true, edge_arrows: true, mute_hold: true, ring_pause: true, ring_resume: true, app_icons: true, app_names: true, settings_button: true, show_border: true, swipe_hold: true, source_style: "tiles", source_colors: true, source_rows: 1, source_icons: {}, hide_sources: [], source_order: [], swipe_slow: 96, swipe_fast: 22, command_gap: 140, height: "auto", pad_ratio: 1.3, ...c };
+    this._c = { sources: true, app_switcher: true, volume: true, keyboard: true, haptics: true, keep_screen_on: true, mute_hold: false, volume_repeat: true, mute_button: true, ring_pause: true, ring_resume: true, app_icons: true, app_names: true, settings_button: true, swipe_hold: true, source_style: "tiles", source_colors: true, source_rows: 1, source_icons: {}, hide_sources: [], source_order: [], swipe_slow: 96, swipe_fast: 22, command_gap: 140, height: "auto", pad_ratio: 1.3, ...c };
     if (Array.isArray(this._c.source_icons)) {   // list form from the visual editor -> map by app name
       const m = {}; this._c.source_icons.forEach(i => { if (i && i.name && (i.icon || i.color)) m[i.name] = { icon: i.icon || undefined, color: i.color || undefined }; });
       this._c = { ...this._c, source_icons: m };
@@ -251,17 +268,18 @@ class AtvTouchpad extends HTMLElement {
   }
   // Quick settings (the cogwheel on the pad, settings_button): they change the card's own options in the dashboard (saved a moment after the
   // last change; needs an administrator). swipe = swipe_sensitivity (divides swipe_slow / swipe_fast), circle / accel = circle_speed / circle_accel
-  // (per app: circle_speed_apps / circle_accel_apps), skip = skip_seconds, rows = source_rows, labels = app_names, apps / order / names =
+  // (per app: circle_speed_apps / circle_accel_apps), skip = skip_seconds, vdelay / vms / vsteps = volume_repeat_delay / _ms / _steps, rows = source_rows, labels = app_names, apps / order / names =
   // source_order, hide_sources and source_names
   _prefs(p) {
     const r = this._raw || {}, lc = o => { const m = {}; Object.keys(o || {}).forEach(k => { m[norm(k).toLowerCase()] = o[k]; }); return m; };
     if (p === undefined) {
       const byApp = {}, sp = lc(r.circle_speed_apps), ac = lc(r.circle_accel_apps);
       Object.keys(sp).forEach(k => { byApp[k] = { ...(byApp[k] || {}), circle: sp[k] }; }); Object.keys(ac).forEach(k => { byApp[k] = { ...(byApp[k] || {}), accel: ac[k] }; });
-      return { radius: this._radiusOwn(), swipe: r.swipe_sensitivity, circle: r.circle_speed, accel: r.circle_accel, skip: r.skip_seconds, haptics: r.haptics, rows: r.source_rows, labels: r.app_names, byApp, names: lc(r.source_names), apps: {}, order: [] };
+      return { radius: this._radiusOwn(), swipe: r.swipe_sensitivity, circle: r.circle_speed, accel: r.circle_accel, skip: r.skip_seconds, vdelay: r.volume_repeat_delay, vms: r.volume_repeat_ms, vsteps: r.volume_repeat_steps, haptics: r.haptics, rows: r.source_rows, labels: r.app_names, byApp, names: lc(r.source_names), apps: {}, order: [] };
     }
     const n = { ...r }, set = (k, v, dflt) => { if (v === undefined || v === null || v === dflt) delete n[k]; else n[k] = v; };
     set("swipe_sensitivity", p.swipe, 1); set("circle_speed", p.circle, 1); set("circle_accel", p.accel); set("skip_seconds", p.skip, 10);
+    set("volume_repeat_delay", p.vdelay, 400); set("volume_repeat_ms", p.vms, 200); set("volume_repeat_steps", p.vsteps, 1);
     set("haptics", p.haptics, true); set("source_rows", p.rows); if (p.radius !== this._radiusOwn()) {   // per screen size (other phones keep theirs); null = automatic by model
       const m = r.screen_radius && typeof r.screen_radius === "object" ? { ...r.screen_radius } : {}, k = screenKey();
       Object.keys(m).forEach(x => { if (x === k || x.startsWith(k + "@")) delete m[x]; });
@@ -342,12 +360,12 @@ class AtvTouchpad extends HTMLElement {
     const sr = this.shadowRoot, card = sr && sr.querySelector("ha-card"); if (!card) return;
     const rows = [...sr.querySelectorAll(".row")].filter(r => r.offsetParent && r.getBoundingClientRect().height);
     this._cornOn = false;
-    const reset = () => sr.querySelectorAll(".row button").forEach(b => { if (b.style.borderBottomLeftRadius || b.style.borderBottomRightRadius || b.style.clipPath) { b.style.borderBottomLeftRadius = b.style.borderBottomRightRadius = b.style.clipPath = ""; } });
+    const reset = () => sr.querySelectorAll(".row > button").forEach(b => { if (b.style.borderBottomLeftRadius || b.style.borderBottomRightRadius || b.style.clipPath) { b.style.borderBottomLeftRadius = b.style.borderBottomRightRadius = b.style.clipPath = ""; } });
     if (this._c.screen_corners === false || !rows.length) { reset(); return; }
     let probe = sr.querySelector("#safeb"); if (!probe) { probe = document.createElement("div"); probe.id = "safeb"; probe.style.cssText = "position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden"; sr.appendChild(probe); }
     const safe = probe.offsetHeight, row = rows.reduce((a, b) => b.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom ? b : a), rb = row.getBoundingClientRect();
     const vw = document.documentElement.clientWidth || window.innerWidth, vh = window.innerHeight, gy = vh - rb.bottom;
-    const bs = [...row.querySelectorAll("button")].filter(b => !b.hidden && b.offsetParent);
+    const bs = [...row.querySelectorAll(":scope > button")].filter(b => !b.hidden && b.offsetParent);
     if (bs.length >= 2 && this._containerCorners(rb, bs, reset)) return;   // a rounded pop-up / dialog round the card: follow its corners
     if (!(safe > 0) || gy < -2 || gy > safe + 40 || bs.length < 2 || !this._onFixed()) { reset(); return; }
     // iPhone screen corners are Apple's "continuous" curve (not a circle): it starts 1.5287 R from the corner and bends gently. Its shape is
@@ -376,9 +394,23 @@ class AtvTouchpad extends HTMLElement {
     };
     cut(bs[0], false); cut(bs[bs.length - 1], true); this._cornOn = !!(bs[0].style.clipPath || bs[bs.length - 1].style.clipPath);
   }
-  connectedCallback() { clearInterval(this._cornT); this._cornT = setInterval(() => this._corners(), 600);   // the card moves (pop-up sliding in, scrolling): checked now and then, only reads positions
+  // keep_screen_on: Screen Wake Lock while the card is on screen and the device is on (the OS drops it when the app hides; re-asked on the next check)
+  _wake() {
+    const st = this._st(), r = this.isConnected && this.getBoundingClientRect();
+    const want = !!this._c && this._c.keep_screen_on !== false && "wakeLock" in navigator && document.visibilityState === "visible" && !!r && r.width > 0 && r.bottom > 0 && r.top < innerHeight
+      && !!st && !["off", "standby", "unavailable", "unknown"].includes(st.state);
+    if (!want) return this._wakeOff();
+    if (this._wl || Date.now() - (this._wlFail || 0) < 10000) return;   // held / being asked for / refused just now
+    const tok = this._wl = {};
+    navigator.wakeLock.request("screen").then(l => {
+      if (this._wl !== tok) { l.release().catch(() => {}); return; }   // no longer wanted while asking
+      this._wl = l; l.addEventListener("release", () => { if (this._wl === l) this._wl = null; });
+    }).catch(() => { if (this._wl === tok) this._wl = null; this._wlFail = Date.now(); });
+  }
+  _wakeOff() { const l = this._wl; this._wl = null; if (l && l.release) l.release().catch(() => {}); }
+  connectedCallback() { clearInterval(this._cornT); this._cornT = setInterval(() => { this._wake(); this._corners(); }, 600);   // the card moves (pop-up sliding in, scrolling): checked now and then, only reads positions
     if (!this._onHide) this._onHide = () => { if (document.visibilityState === "hidden") this._saveNow(); }; document.addEventListener("visibilitychange", this._onHide); }
-  disconnectedCallback() { clearInterval(this._cornT); document.removeEventListener("visibilitychange", this._onHide); this._saveNow(); clearInterval(this._barT); this._barT = null; }
+  disconnectedCallback() { this._volClose(); clearInterval(this._cornT); this._wakeOff(); document.removeEventListener("visibilitychange", this._onHide); this._saveNow(); clearInterval(this._barT); this._barT = null; }
   async _saveDashboard() {   // write this card's options into the dashboard it is on (the card that had the options as last saved)
     if (!this._isAdmin()) { this._say("Only an administrator can change the card's settings"); return; }
     const conn = this._hass.connection, seg = (location.pathname.split("/")[1] || "").trim(), url = !seg || seg === "lovelace" ? null : seg;
@@ -426,6 +458,11 @@ class AtvTouchpad extends HTMLElement {
           (own ? `<button class="pgen">${esc(app)}: same as the other apps</button>` : "");
       })() +
       row("skip", "Skip buttons", 5, 30, 5, c.skip_seconds, v => v + " s") +
+      (c.volume !== false && c.volume_repeat !== false && c.mute_hold !== true ? `<div class="psec">Volume hold</div>` +
+        row("vdelay", "Hold before repeating", 150, 1500, 50, Number(c.volume_repeat_delay) || 400, v => v + " ms") +
+        row("vms", "Time between repeats", 80, 1000, 10, Number(c.volume_repeat_ms) || 200, v => v + " ms") +
+        row("vsteps", "Steps per repeat", 1, 10, 1, Number(c.volume_repeat_steps) || 1, v => String(v)) :
+        c.volume !== false && c.mute_hold === true ? `<div class="psec">Volume hold</div><div class="pnote">Holding volume down mutes, so holding volume does not repeat: you can't have both. Turn off hold to mute in the card's settings for hold to repeat.</div>` : "") +
       (this._cornOn ? `<label class="pt">Screen corner automatic (by phone model)<input type="checkbox" data-pk="rauto" ${this._radiusOwn() === null ? "checked" : ""}></label>` +
         (this._radiusOwn() !== null ? row("radius", `Screen corner for this phone (${screenKey()}): match the buttons below to the screen's curve`, 30, 80, 1, this._radius(), v => v + " px") : "") : "") +
       `<label class="pt">Haptics<input type="checkbox" data-pk="haptics" ${c.haptics ? "checked" : ""}></label>` +
@@ -439,7 +476,7 @@ class AtvTouchpad extends HTMLElement {
     box.querySelectorAll('input[data-pk="circle"], input[data-pk="accel"]').forEach(i => i.onchange = () => { if (this._app() && !box.querySelector(".pgen")) { const top = box.scrollTop; this._prefsOpen(true); box.scrollTop = top; } });   // after letting go: show the "same as the other apps" link
     box.querySelectorAll("input[type=range]").forEach(i => i.oninput = () => { const k = i.dataset.pk, q = this._prefs(), app = this._app().toLowerCase();
       if ((k === "circle" || k === "accel") && app) { q.byApp = { ...(q.byApp || {}) }; q.byApp[app] = { ...(q.byApp[app] || {}), [k]: Number(i.value) }; } else q[k] = Number(i.value);
-      this._prefs(q); if (k === "radius") this._corners(); box.querySelector("#pv-" + k).textContent = k === "rows" ? (Number(i.value) ? i.value : "all") : k === "skip" ? i.value + " s" : k === "radius" ? i.value + " px" : k === "accel" ? Number(i.value).toFixed(1) : "x" + Number(i.value).toFixed(1); });
+      this._prefs(q); if (k === "radius") this._corners(); box.querySelector("#pv-" + k).textContent = k === "rows" ? (Number(i.value) ? i.value : "all") : k === "skip" ? i.value + " s" : k === "radius" ? i.value + " px" : k === "vdelay" || k === "vms" ? i.value + " ms" : k === "vsteps" ? i.value : k === "accel" ? Number(i.value).toFixed(1) : "x" + Number(i.value).toFixed(1); });
     const ra = box.querySelector('input[data-pk="rauto"]'); if (ra) ra.onchange = () => { const q = this._prefs(); q.radius = ra.checked ? null : this._radius(); this._prefs(q); this._corners(); const top = box.scrollTop; this._prefsOpen(true); box.scrollTop = top; };   // automatic: no slider
     box.querySelector('input[data-pk="haptics"]').onchange = e => { const q = this._prefs(); q.haptics = e.target.checked; this._prefs(q); };
     const nmb = box.querySelector('input[data-pk="labels"]'); if (nmb) nmb.onchange = e => { const q = this._prefs(); q.labels = e.target.checked; this._prefs(q); };
@@ -499,35 +536,32 @@ class AtvTouchpad extends HTMLElement {
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
 <style>
-ha-card{${c.show_border === false ? "border:none !important;box-shadow:none !important;--ha-card-border-width:0px;" : ""}padding:${Number(c.top_padding) >= 0 && c.top_padding !== "" && c.top_padding !== null && c.top_padding !== undefined ? Number(c.top_padding) : 12}px ${Number(c.side_padding) >= 0 && c.side_padding !== "" && c.side_padding !== null ? Number(c.side_padding) : 12}px ${Number(c.bottom_padding) >= 0 && c.bottom_padding !== "" && c.bottom_padding !== null && c.bottom_padding !== undefined ? Number(c.bottom_padding) : 12}px;display:flex;flex-direction:column;gap:10px;height:${c.height};box-sizing:border-box;overflow:hidden;position:relative;--ratio:${Number(c.pad_ratio) > 0 ? Number(c.pad_ratio) : 1.3}}
+ha-card{${STYLE_CSS[cardStyle(c)]}padding:${Number(c.top_padding) >= 0 && c.top_padding !== "" && c.top_padding !== null && c.top_padding !== undefined ? Number(c.top_padding) : 12}px ${Number(c.side_padding) >= 0 && c.side_padding !== "" && c.side_padding !== null ? Number(c.side_padding) : 12}px ${Number(c.bottom_padding) >= 0 && c.bottom_padding !== "" && c.bottom_padding !== null && c.bottom_padding !== undefined ? Number(c.bottom_padding) : 12}px;display:flex;flex-direction:column;gap:10px;height:${c.height};box-sizing:border-box;overflow:hidden;position:relative;--ratio:${Number(c.pad_ratio) > 0 ? Number(c.pad_ratio) : 1.3}}
 button{cursor:pointer;-webkit-tap-highlight-color:transparent;border:0;color:var(--primary-text-color);font:500 13px var(--paper-font-body1_-_font-family,system-ui)}
 .src{display:grid;grid-template-columns:repeat(var(--cols,1),max-content);justify-content:start;align-content:start;gap:8px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;touch-action:pan-x pan-y;scrollbar-width:none;flex:0 0 auto}   /* source_rows lines, evenly filled; a line wider than the card scrolls sideways (all lines together) */
 .src.tiles{grid-template-columns:repeat(var(--cols,1),78px)}.src.paged{scroll-snap-type:x mandatory}.src.paged .pgs{scroll-snap-align:start;scroll-snap-stop:always}
 .src.all{overflow:visible}
 .src.center{justify-content:center}   /* everything fits: centred */
 .src:empty{display:none}
-.src button{flex:0 0 auto;border-radius:12px;padding:9px 14px;background:var(--secondary-background-color)}
+.src button{flex:0 0 auto;border-radius:12px;padding:9px 14px;background:var(--rs)}
 .src.tiles button{width:78px;height:64px;box-sizing:border-box;justify-content:center;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;line-height:1.15}
 .src.tiles ha-icon{--mdc-icon-size:28px;color:var(--ic,var(--secondary-text-color))}
-.src.tiles.col button{background:color-mix(in srgb,var(--ic) 16%,var(--secondary-background-color))}
-.src.tiles.col button.on{background:color-mix(in srgb,var(--ic) 30%,var(--secondary-background-color))}
+.src.tiles.col button{background:color-mix(in srgb,var(--ic) 16%,var(--rs))}
+.src.tiles.col button.on{background:color-mix(in srgb,var(--ic) 30%,var(--rs))}
 .src.tiles .appimg,.src.tiles .plate{width:58px;height:35px;border-radius:7px;object-fit:cover;flex:none;box-shadow:0 1px 3px rgba(0,0,0,.35)}.src.tiles .plate{display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,color-mix(in srgb,var(--pc) 75%,#fff),var(--pc) 55%,color-mix(in srgb,var(--pc) 70%,#000))}.src.tiles .plate ha-icon{--mdc-icon-size:22px;color:#fff}.src.tiles .plate.logo{background:var(--pc);isolation:isolate}.src.tiles .plate.logo img{isolation:isolate}   /* an image that blends its parts (mix-blend-mode) must not blend with the plate: on iOS that turned it white on a white plate */.src.tiles .plate.logo img{max-width:72%;max-height:72%;object-fit:contain}.src.tiles .plate.logo.full{overflow:hidden}.src.tiles .plate.logo.full img{width:100%;height:100%;max-width:none;max-height:none;object-fit:cover}.src.tiles .plate.sq img{height:82%;aspect-ratio:1;border-radius:22%;box-shadow:0 1px 4px rgba(0,0,0,.35)}.src.tiles .plate.dark{background:#000;gap:1px}.src.tiles .plate.dark b{color:#fff;font:600 calc(var(--tw,92px) * .2)/1 -apple-system,system-ui,sans-serif;letter-spacing:-.5px}.src.tiles .plate.dark ha-icon{--mdc-icon-size:calc(var(--tw,92px) * .22)}.src.tiles button.img{gap:5px;padding-top:7px}   /* app_icons */
 .src.tiles.tv{grid-template-columns:repeat(var(--cols,1),var(--tw,92px))}.src.tiles.tv button,.src.tiles.tv.col button{width:var(--tw,92px);height:auto;padding:0 0 2px;gap:5px;background:none;box-shadow:none}.src.tiles.tv .appimg,.src.tiles.tv .plate{width:var(--tw,92px);height:calc(var(--tw,92px) * .6);border-radius:10px}.src.tiles.tv .plate ha-icon{--mdc-icon-size:26px}.src.tiles.tv button.on .appimg,.src.tiles.tv button.on .plate{box-shadow:0 0 0 2px var(--primary-color),0 4px 12px rgba(0,0,0,.4)}.src.tiles.tv button.on{background:none;box-shadow:none}.src.tiles.tv{padding:3px;margin:-${Math.min(3, Number(c.top_padding) >= 0 && c.top_padding !== "" && c.top_padding !== null && c.top_padding !== undefined ? Number(c.top_padding) : 12)}px 0 -3px;scroll-padding-inline:3px}   /* tvOS proportions: 5:3 icons with the name under them */
 .src.tiles.nonames span:not(.plate){display:none}   /* app_names: false = icons only */
 .src.tiles span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.src button.on{background:color-mix(in srgb,var(--primary-color) 22%,var(--secondary-background-color));box-shadow:inset 0 0 0 2px var(--primary-color)}
+.src button.on{background:color-mix(in srgb,var(--primary-color) 22%,var(--rs));box-shadow:inset 0 0 0 2px var(--primary-color)}
 .src.chips button.on{background:var(--primary-color);color:var(--text-primary-color,#fff);box-shadow:none}
-#pad{position:relative;flex:1 1 0;min-height:110px;border-radius:20px;background:var(--secondary-background-color);touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
+#pad{position:relative;flex:1 1 0;min-height:110px;border-radius:20px;background:var(--rs);touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
 ha-card.auto #pad{flex:none;aspect-ratio:var(--ratio)}   /* height: auto = content-sized card; _sizePad keeps the size constant when the text box shows */
 #pad ha-icon{position:absolute;opacity:.25;--mdc-icon-size:26px;pointer-events:none}
 #pad .logo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:rgba(0,0,0,.3);filter:var(--atv-engrave);pointer-events:none;display:block;height:140px}#pad .logo.txt{height:64px}   /* one SVG: the apple, and logo_text on its baseline */
 #pad{--atv-engrave:drop-shadow(0 1px 0 rgba(255,255,255,.16)) drop-shadow(0 -1px 0 rgba(0,0,0,.45))}   /* the logo looks engraved: darker than the pad, a light edge below, a dark edge above */
 #pad .ringw{display:none;position:absolute;left:50%;top:50%;height:min(230px,86%);aspect-ratio:1;transform:translate(-50%,-50%);pointer-events:none}#pad.circle .ringw{display:block}#pad.armed .ring{opacity:.35;background:var(--primary-color)}#pad.scrub .ring{opacity:.35;background:#34c759}   /* blue = the jog ring of Apple's player, green = scrubbing by a sideways touch */
 #pad .ring{width:100%;height:100%;border-radius:50%;background:conic-gradient(from 90deg,transparent,var(--primary-text-color));opacity:.12;-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px))}   /* circle_scrub: a ring that fades in clockwise (a turning dial) shows that circling scrubs */
-#pad .u{top:10px;left:50%;margin-left:-13px}#pad .d{bottom:10px;left:50%;margin-left:-13px}
-#pad .l{left:10px;top:50%;margin-top:-13px}#pad .r{right:10px;top:50%;margin-top:-13px}
-#pad.noarrows ha-icon.u,#pad.noarrows ha-icon.d,#pad.noarrows ha-icon.l,#pad.noarrows ha-icon.r{display:none!important}
-#pad.flash{background:color-mix(in srgb,var(--primary-color) 25%,var(--secondary-background-color))}
+#pad.flash{background:color-mix(in srgb,var(--primary-color) 25%,var(--rs))}
 .tg{position:absolute;top:8px;right:8px;width:38px;height:38px;border-radius:50%;background:rgba(127,127,127,.15);opacity:.75;display:none;align-items:center;justify-content:center;padding:0}
 #pbar{display:flex;margin:-6px 0;touch-action:none;user-select:none;-webkit-user-select:none}#pbar[hidden]{display:none}
 #pbar .tr{position:relative;flex:1;height:20px;cursor:pointer}#pbar .tr::before{content:"";position:absolute;left:0;right:0;top:9px;height:2px;border-radius:1px;background:rgba(127,127,127,.25)}
@@ -548,11 +582,16 @@ ha-card.auto #pad{flex:none;aspect-ratio:var(--ratio)}   /* height: auto = conte
 #pad.prow .logo,#pad.prow .ringw{top:calc(50% - 26px)}#pad.prow .ringw{height:min(230px,calc(86% - 52px))}
 #kb{display:none;flex:0 0 auto}
 #kb.on{display:block}
-#kb input{width:100%;box-sizing:border-box;height:44px;border:0;border-radius:12px;padding:0 14px;background:var(--secondary-background-color);color:var(--primary-text-color);font:16px var(--paper-font-body1_-_font-family,system-ui);outline:2px solid var(--primary-color)}
+#kb input{width:100%;box-sizing:border-box;height:44px;border:0;border-radius:12px;padding:0 14px;background:var(--rs);color:var(--primary-text-color);font:16px var(--paper-font-body1_-_font-family,system-ui);outline:2px solid var(--primary-color)}
 .row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.row button{border-radius:12px;background:var(--secondary-background-color);padding:12px 4px;display:flex;align-items:center;justify-content:center;transition:background .25s,color .25s}
-.row button.paused{background:color-mix(in srgb,var(--primary-color) 22%,var(--secondary-background-color));color:var(--primary-color)}
-.row button:active{filter:brightness(1.4)}
+#vpop{position:fixed;inset:0;width:100%;height:100%;margin:0;border:0;padding:0;background:rgba(0,0,0,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font:600 14px system-ui,sans-serif;text-align:center;overflow:hidden;transition:opacity .4s;touch-action:none;user-select:none;-webkit-user-select:none}
+#vpop .b{position:absolute;left:20%;width:60%;top:12%;height:76%;border-radius:32px;background:rgba(46,51,60,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 4px 18px rgba(0,0,0,.45);overflow:hidden}
+#vpop .f{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(rgba(125,190,255,.6),rgba(60,130,240,.6))}
+#vpop .n{position:absolute;left:0;right:0;top:14px;text-shadow:0 1px 4px #000;padding:0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#vpop .v{position:absolute;left:0;right:0;bottom:16px;text-shadow:0 1px 5px #000;font-size:44px;font-variant-numeric:tabular-nums}
+.row button{border-radius:12px;background:var(--rs);padding:12px 4px;display:flex;align-items:center;justify-content:center;transition:background .25s,color .25s}
+.row button.paused{background:color-mix(in srgb,var(--primary-color) 22%,var(--rs));color:var(--primary-color)}
+.row button:active,.row button.on{filter:brightness(1.4)}
 #rowa button{padding:17px 4px}
 .row button.off{color:var(--error-color)}
 button[hidden]{display:none !important}
@@ -565,8 +604,6 @@ button[hidden]{display:none !important}
     <button class="tg" id="cog" title="Settings"><ha-icon icon="mdi:cog-outline"></ha-icon></button>
     <div id="prefs"></div>
     <button class="tg" id="kbbtn" title="Keyboard"><ha-icon icon="mdi:keyboard"></ha-icon></button>
-    <ha-icon class="u" icon="mdi:chevron-up"></ha-icon><ha-icon class="d" icon="mdi:chevron-down"></ha-icon>
-    <ha-icon class="l" icon="mdi:chevron-left"></ha-icon><ha-icon class="r" icon="mdi:chevron-right"></ha-icon>
     <svg class="logo"></svg>
     <div class="ringw"><div class="ring"></div></div>
     <div id="prow"><button class="tg" data-p="back" title="Skip back (hold = rewind)"><ha-icon icon="mdi:rewind"></ha-icon></button><button class="tg" data-p="info" title="Info"><ha-icon icon="mdi:information-outline"></ha-icon></button><button class="tg" data-p="fwd" title="Skip forward (hold = fast forward)"><ha-icon icon="mdi:fast-forward"></ha-icon></button></div>
@@ -581,6 +618,8 @@ button[hidden]{display:none !important}
   </div>
   <div class="row" id="rowb">
     <button data-k="vdown" title="Volume down"><ha-icon icon="mdi:volume-minus"></ha-icon></button>
+    <button id="vol" title="Volume"><ha-icon icon="mdi:volume-high"></ha-icon></button>
+    <button id="mute" title="Mute"><ha-icon icon="mdi:volume-mute"></ha-icon></button>
     <button data-k="vup" title="Volume up"><ha-icon icon="mdi:volume-plus"></ha-icon></button>
     <button data-k="switcher" title="App switcher (double-press TV / Home)"><ha-icon icon="mdi:card-multiple-outline"></ha-icon></button>
   </div>
@@ -602,11 +641,23 @@ button[hidden]{display:none !important}
     pw.onpointerdown = () => { long = false; clearTimeout(pt); pt = setTimeout(() => { long = true; this._buzz(); this._power(true); }, 600); };
     pw.onpointerup = pw.onpointerleave = pw.onpointercancel = () => clearTimeout(pt);
     pw.onclick = () => { if (!long) { this._buzz(); this._power(false); } };
-    // volume down held = mute (the Apple TV has no mute key: the integration sets the volume to 0 and back). Needs the integration
-    const vd = $('[data-k="vdown"]'); let vlong = false, vt;
-    vd.onpointerdown = () => { vlong = false; clearTimeout(vt); if (this._c.mute_hold === false) return; vt = setTimeout(() => { vlong = true; this._buzz(); this._mute(); }, 600); };
-    vd.onpointerup = vd.onpointerleave = vd.onpointercancel = () => clearTimeout(vt);
-    vd.onclick = () => { if (!vlong) { this._buzz(); this._send("vdown"); } };
+    // volume - / +: volume down held = mute (mute_hold, as the mute button); without hold to mute, held = keep stepping (volume_repeat). Never both
+    ["vdown", "vup"].forEach(k => {
+      const b = $(`[data-k="${k}"]`); let held = false, t = null, beat = null;
+      const stop = () => { clearTimeout(t); clearInterval(beat); t = beat = null; b.classList.remove("on"); };
+      b.onpointerdown = () => {
+        held = false; stop();
+        if (k === "vdown" && this._c.mute_hold === true) t = setTimeout(() => { held = true; this._buzz(); this._mute(); }, 600);
+        else if (this._c.volume_repeat !== false && this._c.mute_hold !== true) {   // hold to repeat only without hold to mute (not both)
+          const n = Math.max(1, Math.round(+this._c.volume_repeat_steps || 1)), step = () => n > 1 ? this._cmd(k === "vup" ? "volume_up" : "volume_down", { num_repeats: n, delay_secs: 0.05 }) : this._send(k);
+          t = setTimeout(() => { held = true; b.classList.add("on"); this._buzz(); step(); beat = setInterval(step, Math.max(80, +this._c.volume_repeat_ms || 200)); }, Math.max(150, +this._c.volume_repeat_delay || 400));
+        }
+      };
+      b.onpointerup = b.onpointerleave = b.onpointercancel = stop;
+      b.onclick = () => { if (held) { held = false; return; } this._buzz(); this._send(k); };
+    });
+    $("#mute").onclick = () => { this._buzz(); this._mute(); };
+    $("#vol").onclick = () => { this._buzz(); this._volOpen(); };
     // keyboard: typing is mirrored to the focused text field (apple_tv.set_keyboard_text)
     const kbi = $("#kb input");
     kbi.addEventListener("input", () => this._text(kbi.value));
@@ -696,8 +747,68 @@ button[hidden]{display:none !important}
   }
   // player_buttons: the bottom row of Apple's Remote app. Skip = 10 s back / forward (pyatv), info = Down (opens the player's info panel),
   // (no subtitle button: the Apple TV's subtitle setting does not switch the subtitles of the video playing). Needs the integration
+  // volume pop-up (volume_slider): a full-screen vertical slider in the top layer, as the media players' volume slider. Drag up / down from the
+  // current level (where you touch does not matter); a tap beside the bar closes it, and it closes 5 s after the last touch
+  _volOpen() {
+    const sr = this.shadowRoot; let p = this._vp;
+    if (!p) {
+      const el = document.createElement("div"); el.id = "vpop"; el.setAttribute("popover", "manual");
+      el.innerHTML = '<div class="b"><div class="f"></div><div class="n"></div><div class="v"></div></div>'; sr.appendChild(el);
+      const bar = el.querySelector(".b");
+      p = this._vp = { el, open: false, drag: false, last: 0, cur: 0, want: null, pend: null };
+      p.draw = v => { p.cur = Math.min(1, Math.max(0, v)); el.querySelector(".f").style.height = p.cur * 100 + "%"; el.querySelector(".v").textContent = Math.round(p.cur * 100) + "%"; };
+      const go = again => {   // plain throttle while moving; on release the final level goes again shortly after (a call that lands mid-change can be dropped)
+        p.pend = null; if (p.want === null) return; const v = p.want, e = this._volEnt(); p.last = Date.now();
+        this._hass.callService("media_player", "volume_set", { entity_id: e, volume_level: v });
+        if (again) setTimeout(() => this._hass.callService("media_player", "volume_set", { entity_id: e, volume_level: v }), 600); else p.want = null;
+      };
+      const set = (v, fin) => {
+        p.draw(v); p.want = Math.round(p.cur * 1000) / 1000;
+        if (fin) { clearTimeout(p.pend); p.pend = null; go(true); p.want = null; }
+        else if (Date.now() - p.last > 260) go(); else if (!p.pend) p.pend = setTimeout(go, Math.max(20, 260 - (Date.now() - p.last)));
+      };
+      p.arm = () => { clearTimeout(p.t); p.t = setTimeout(() => this._volClose(), 5000); };
+      let y0 = 0, p0 = 0, out = false, tick = -1;
+      el.onpointerdown = ev => {
+        ev.preventDefault(); ev.stopPropagation();
+        if (!ev.composedPath().includes(bar)) { out = true; return; }   // beside the bar: closes on release
+        out = false; p.drag = true; clearTimeout(p.t); y0 = ev.clientY; p0 = p.cur; try { bar.setPointerCapture(ev.pointerId); } catch (x) {}
+      };
+      el.onpointermove = ev => { if (!p.drag) return; ev.preventDefault(); set(p0 + (y0 - ev.clientY) / bar.getBoundingClientRect().height);
+        const pc = Math.round(p.cur * 100); if (pc !== tick && pc % 5 === 0) this._buzz(); tick = pc; };   // a light tick every 5 %
+      el.onpointerup = el.onpointercancel = ev => { ev.preventDefault(); ev.stopPropagation(); if (p.drag) { p.drag = false; set(p.cur, true); p.arm(); } else if (out) { out = false; this._volClose(); } else p.arm(); };
+      el.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); };
+      ["touchstart", "touchmove", "touchend"].forEach(t => el.addEventListener(t, ev => { ev.stopPropagation(); if (t !== "touchstart") ev.preventDefault(); }, { passive: false }));   // never reaches pop-up / page gestures
+    }
+    const s = this._hass && this._hass.states[this._volEnt()];
+    p.el.querySelector(".n").textContent = (s && s.attributes.friendly_name) || this._volEnt();
+    p.draw(this._volLevel() || 0); clearTimeout(p.hideT);
+    try { if (!p.el.matches(":popover-open")) p.el.showPopover(); } catch (x) {}
+    p.el.style.opacity = "1"; p.open = true; p.arm();
+  }
+  _volClose() {
+    const p = this._vp; if (!p || !p.open) return; p.open = false; p.drag = false; clearTimeout(p.t); p.el.style.opacity = "0";
+    p.hideT = setTimeout(() => { try { if (!p.open && p.el.matches(":popover-open")) p.el.hidePopover(); } catch (x) {} }, 400);   // fades out, then leaves the top layer
+  }
+  _sliderOn() { const v = this._c.volume_slider; return v === undefined || v === null ? !!this._volOwn() : v !== false; }   // default: on with a volume player of its own
+  _volOwn() { const e = this._c.volume_entity; return typeof e === "string" && e.includes(".") ? e : null; }
+  _volEnt() { const e = this._c.volume_entity; return typeof e === "string" && e.includes(".") ? e : this._c.entity; }   // the media player the volume slider shows and sets
+  _volLevel() { const s = this._hass && this._hass.states[this._volEnt()], v = s && s.attributes.volume_level; return typeof v === "number" && !["off", "unavailable", "unknown"].includes(s.state) ? v : null; }
+  _muteEnt() { const e = this._c.mute_entity; return typeof e === "string" && e.includes(".") ? e : null; }
   async _mute() {
-    try { const r = await this._hass.connection.sendMessagePromise({ type: "apple_tv_remote/player", entity_id: this._c.entity, action: "mute" }); this._say(r.muted ? "Muted" : "Sound on"); }
+    const e = this._muteEnt(), h = this._hass;
+    if (e && h) {   // mute_entity: mute what it is (soundbar / TV / its remote / a button, script or switch)
+      const d = e.split(".")[0], s = h.states[e];
+      try {
+        if (d === "media_player") { const m = !(s && s.attributes.is_volume_muted); await h.callService("media_player", "volume_mute", { entity_id: e, is_volume_muted: m }); this._say(m ? "Muted" : "Sound on"); }
+        else if (d === "remote") await h.callService("remote", "send_command", { entity_id: e, command: this._c.mute_command || "mute" });
+        else if (d === "button" || d === "input_button") await h.callService(d, "press", { entity_id: e });
+        else if (d === "script" || d === "scene") await h.callService(d, "turn_on", { entity_id: e });
+        else await h.callService("homeassistant", "toggle", { entity_id: e });
+      } catch (err) { this._say("Mute failed: " + (err && err.message || err)); }
+      return;
+    }
+    try { const r = await this._hass.connection.sendMessagePromise({ type: "apple_tv_remote/player", entity_id: this._c.entity, action: "mute" }); if (!r.key) this._say(r.muted ? "Muted" : "Sound on"); }   // key: the remote's own mute key (the TV shows it)
     catch (e) { this._say("Mute not available"); }
   }
   async _player(what) {
@@ -887,7 +998,14 @@ button[hidden]{display:none !important}
     if (!this._awake() && this.offsetWidth > 0 && Date.now() - (this._recoT || 0) > 60000) { this._recoT = Date.now(); this._reconnect(); }   // remote on screen, Apple TV looks off: make sure the integration is connected
     const pb = c.power_position === "bottom", vol = c.volume !== false, sw = c.app_switcher !== false && !pb;   // power at the bottom takes the app switcher's place
     if (pb !== ($("#pwr").parentElement.id === "rowb")) { if (pb) $("#rowb").appendChild($("#pwr")); else $("#rowa").insertBefore($("#pwr"), $("#rowa").firstChild); }
-    $('[data-k="vdown"]').hidden = $('[data-k="vup"]').hidden = !vol; $('[data-k="switcher"]').hidden = !sw;
+    const mb = vol && c.mute_button !== false;   // mute button: the Siri Remote's mute key or mute_entity
+    const lvl = this._volLevel(), vs = vol && this._sliderOn() && lvl !== null;   // volume slider: only when the volume player reports its level
+    $('[data-k="vdown"]').hidden = $('[data-k="vup"]').hidden = !vol || vs; $("#vol").hidden = !vs; $('[data-k="switcher"]').hidden = !sw; $("#mute").hidden = !mb;
+    { const pct = Math.round((lvl || 0) * 100), ic = pct === 0 ? "mdi:volume-off" : pct < 34 ? "mdi:volume-low" : pct < 67 ? "mdi:volume-medium" : "mdi:volume-high", h = $("#vol ha-icon");
+      if (h.getAttribute("icon") !== ic) h.setAttribute("icon", ic);
+      if (!vs) this._volClose(); else if (this._vp && this._vp.open && !this._vp.drag && Date.now() - (this._vp.last || 0) > 1500) this._vp.draw(lvl); }   // the pop-up follows the player's level
+    { const me = this._muteEnt(), ms = me && this._hass && this._hass.states[me], m = !!(ms && ms.attributes.is_volume_muted);   // a muted media player shows on the button
+      $("#mute").classList.toggle("paused", m); const mi = $("#mute ha-icon"), ic = m ? "mdi:volume-off" : "mdi:volume-mute"; if (mi.getAttribute("icon") !== ic) mi.setAttribute("icon", ic); }
     this._bar();
     { // play / pause button: shows what a press does (pause while playing, play while paused), tinted while paused; unknown = both
       const b = $('[data-k="play"]'), s0 = st && st.state, ic = s0 === "playing" ? "mdi:pause" : s0 === "paused" ? "mdi:play" : "mdi:play-pause", hi = b.querySelector("ha-icon");
@@ -898,13 +1016,12 @@ button[hidden]{display:none !important}
     ["back", "home", "play"].filter(k => !nav.includes(k)).concat([]).forEach(k => nav.push(k)); nav.forEach(k => $("#rowa").appendChild($(`#rowa [data-k="${k}"]`)));
     $("#rowa").style.gridTemplateColumns = "repeat(" + (pb ? 3 : 4) + ",1fr)";
     $("#rowb").style.display = vol || sw || pb ? "" : "none";
-    $("#rowb").style.gridTemplateColumns = "repeat(" + ((vol ? 2 : 0) + (sw ? 1 : 0) + (pb ? 1 : 0) || 1) + ",1fr)";
+    $("#rowb").style.gridTemplateColumns = "repeat(" + ((vol ? (vs ? 1 : 2) : 0) + (mb ? 1 : 0) + (sw ? 1 : 0) + (pb ? 1 : 0) || 1) + ",1fr)";
     $("#pwr").classList.toggle("off", !this._awake());
     $("#pad").classList.toggle("circle", this._circleOn());
     $("#cog").style.display = c.settings_button === false ? "none" : "flex"; $("#pad").classList.toggle("cog", c.settings_button !== false);
     if ($("#pad").classList.contains("prow") !== (c.player_buttons === true)) { $("#pad").classList.toggle("prow", c.player_buttons === true); this._sizePad(); }
     if (this._logoFor !== (c.logo_text || "") || !$("#pad .logo").firstChild) { this._logoFor = c.logo_text || ""; logoSvg($("#pad .logo"), this._logoFor); }
-    $("#pad").classList.toggle("noarrows", c.edge_arrows === false);
     const ks = this._kbSensor(), kst = ks && this._hass && this._hass.states[ks];
     const hasEntry = !!(this._info && this._info.config_entry_id), focus = !!kst && kst.state === "on" && hasEntry;
     if (focus !== this._lastFocus) { this._lastFocus = focus; this._kbMode = null; }   // the Apple TV opening / closing a text field resets your choice
@@ -1088,10 +1205,7 @@ button[hidden]{display:none !important}
       if (cg) { const g = cg; cg = null; endHold(); this._circleSend(g, "release"); if (g.ring && this._c.ring_resume !== false) g.chain = g.chain.then(() => new Promise(r => setTimeout(r, 300))).then(() => this._hass.callService("media_player", "media_play", { entity_id: this._c.entity })).catch(() => {}); return; }   // ring_resume: after the jog ring the video plays on
       if (endHold()) return;
       if (!tap) return;
-      const r = el.getBoundingClientRect(), dl = sx - r.left, dr = r.right - sx, dt = sy - r.top, db = r.bottom - sy, m = Math.min(dl, dr, dt, db);
-      const k = m > EDGE || this._c.edge_arrows === false ? "ok" : m === dl ? "left" : m === dr ? "right" : m === dt ? "up" : "down";   // inside = select, near an edge = that arrow
-      if (k === "ok") this._buzz();
-      flash(); this._send(k);
+      this._buzz(); flash(); this._send("ok");   // a tap anywhere = select (navigate by swiping)
     });
     el.addEventListener("pointercancel", () => { endHold(); clearTimeout(ringT); ringT = null; el.classList.remove("armed", "scrub"); if (cg) { this._circleSend(cg, "release"); cg = null; } id = null; });
     // A pop-up around the card must not react to swipes on the pad: custom_components/tv_touchpad (swipe down to close, side swipes) skips gestures that
@@ -1103,7 +1217,7 @@ button[hidden]{display:none !important}
 if (!customElements.get("atv-touchpad")) customElements.define("atv-touchpad", AtvTouchpad);
 
 // ---- Visual editor (card picker / "Edit card"): ha-form with selectors, plus our own app list (drag to reorder, eye = hide, select mode) ----
-const DEFAULTS = { circle_scrub: true, screen_corners: true, show_time: true, progress_bar: true, sources: true, app_switcher: true, volume: true, keyboard: true, haptics: true, edge_arrows: true, mute_hold: true, ring_pause: true, ring_resume: true, app_icons: true, app_names: true, settings_button: true, show_border: true, circle_turn: 1000, circle_accel: 1, ring_hold: 350, skip_seconds: 10, swipe_hold: true, source_style: "tiles", source_colors: true, source_rows: 1, swipe_slow: 96, swipe_fast: 22, command_gap: 140, height: "auto", pad_ratio: 1.3 };
+const DEFAULTS = { circle_scrub: true, screen_corners: true, show_time: true, progress_bar: true, sources: true, app_switcher: true, volume: true, keyboard: true, haptics: true, keep_screen_on: true, mute_hold: false, volume_repeat: true, mute_button: true, ring_pause: true, ring_resume: true, app_icons: true, app_names: true, settings_button: true, style: "card", circle_turn: 1000, circle_accel: 1, ring_hold: 350, skip_seconds: 10, swipe_hold: true, source_style: "tiles", source_colors: true, source_rows: 1, swipe_slow: 96, swipe_fast: 22, command_gap: 140, height: "auto", pad_ratio: 1.3 };
 const FIELD_LABELS = { name: "App name", icon: "Icon", color: "Colour (for example #e50914)" };
 const LABELS = {
   circle_turn: ["Circle: distance per turn", "In apps without Apple's jog ring: how far one turn scrubs (1000 = one swipe across the whole touch surface). Netflix gets 2.7x (circle_turn_apps in YAML)."],
@@ -1123,16 +1237,26 @@ const LABELS = {
   height: ["Card height", "auto = as tall as the content (default). Or any CSS value, for example 70vh or 100% to fill a pop-up; the touchpad then takes the spare space."],
   pad_ratio: ["Touchpad shape (width / height)", "Only with height auto. Higher = flatter touchpad, lower = taller."],
   sources: ["App tiles", "Show a tile for every app the Apple TV reports."],
-  settings_button: ["Settings button", "A cogwheel on the pad with quick settings (swipe sensitivity, circle speed, skip seconds, haptics, which apps show), kept per browser."],
-  mute_hold: ["Hold volume down to mute", "The Apple TV has no mute key: holding volume down sets the volume to 0, holding it again brings it back."],
+  settings_button: ["Settings button", "A cogwheel on the pad with quick settings (swipe sensitivity, circle speed, skip seconds, volume hold, haptics, which apps show), saved in the card config."],
+  volume_repeat: ["Hold volume to repeat", "Holding volume up / down keeps stepping the volume until you let go. You can't have both: only available while hold to mute is off."],
+  volume_repeat_delay: ["Volume hold: delay", "Milliseconds you hold before the repeat starts (a shorter press is one step)."],
+  volume_repeat_ms: ["Volume hold: interval", "Milliseconds between two repeats: lower = faster. The Apple TV may drop keys that come too fast."],
+  volume_repeat_steps: ["Volume hold: steps per repeat", "Volume key presses per repeat: higher = bigger jumps. The size of one step is set by the TV or soundbar."],
+  mute_hold: ["Hold volume down to mute", "Holding volume down mutes, the same as the mute button; holding it again brings the sound back. You can't have both: while this is on, hold to repeat volume is off (turn this off to get the repeat options)."],
+  mute_button: ["Mute button", "A mute button in the volume row. The Siri Remote's mute key, or the mute entity when set."],
+  mute_entity: ["Mute entity", "What mute acts on: a soundbar or TV media player (mute toggles), a remote (sends the mute command), a button or script (pressed / run) or a switch (toggled). Empty = the Apple TV: the mute key of the Siri Remote (the Apple TV passes it on to the TV or soundbar; needs the integration)."],
+  mute_command: ["Mute command", "Only for a remote as mute entity: the command it sends, for example mute, KEY_MUTE or MUTE."],
   volume_row: ["Volume row", "Bottom: the last row of the card. Top: just above the touchpad."],
   nav_order: ["Button order", "Order of back, home and play, for example home, back, play."],
   power_position: ["Power button", "Top: first button of the top row. Bottom: last button of the volume row, in place of the app switcher."],
   app_switcher: ["App switcher button", "Double-presses the TV / Home key, which opens the app switcher."],
   volume: ["Volume buttons", "Volume down / up. The Apple TV passes them on to the TV or soundbar it is set up to control."],
+  volume_slider: ["Volume slider", "One volume button that opens a full-screen volume slider (drag up / down, tap beside it to close), when the volume player reports its volume. Default: on when a volume player is set, else the volume down / up buttons."],
+  volume_entity: ["Volume player", "The media player for volume, for example the soundbar or TV: the volume slider shows and sets its volume. Empty = the Apple TV (most only report a volume with HomePods or AirPlay speakers)."],
   keyboard: ["Keyboard button", "A keyboard button on the touchpad. The text box also opens by itself when a text field on the Apple TV has focus."],
-  show_border: ["Card border", "Show the border and shadow around the card. Turn it off when the card sits inside a pop-up or stack that has its own frame."],
+  style: ["Card style", "Card = normal card. Flat = no border or shadow (for a pop-up or stack with its own frame). Transparent = no card background and see-through buttons, so the remote blends into a pop-up or blurred background."],
   haptics: ["Haptics", "Vibrate on taps (HA app haptics or the browser vibration)."],
+  keep_screen_on: ["Keep screen on", "The phone or tablet screen stays on while this card is shown and the device is on."],
   source_style: ["App style", "Tiles = icon and name (known apps get their icon and colour, the rest a neutral icon), chips = name only."],
   source_rows: ["Tile rows", "How many lines of tiles. More tiles than fit go on pages: the first ones in view, left to right and top to bottom; a swipe moves one page. 0 = as many lines as needed."],
   source_colors: ["Colour the tiles", "On: brand colour for known apps, a stable own colour for every other app. Off: neutral tiles."],
@@ -1148,7 +1272,6 @@ const LABELS = {
   bottom_padding: ["Bottom margin (px)", "Space below the last row of buttons; 0 = none."],
   app_icons: ["Real app icons", "App Store apps show their real icon (looked up on Apple's App Store by the integration), Apple's own apps a colour plate. Off: plain symbols."],
   logo_text: ["Logo text", "A word after the Apple logo on the pad, for example tv"],
-  edge_arrows: ["Edge arrows", "Show arrows on the pad; a tap near an edge sends that arrow. Off: the pad has no arrows and every tap is select."],
   circle_scrub: ["Circle to scrub", "Go round with your finger on the pad to scrub through a video: clockwise is forward, the other way is back, for as long as you keep turning. In the Apple TV app this turns the player's own jog ring; in other apps it becomes a long sideways swipe. Needs the integration."],
   swipe_slow: ["Slow swipe distance (px)", "How far you drag for one step when you swipe slowly. Higher = less sensitive."],
   swipe_fast: ["Fast swipe distance (px)", "How far you drag for one step when you swipe fast. Lower = faster scrolling."],
@@ -1302,14 +1425,21 @@ class AtvTouchpadEditor extends HTMLElement {
     if (this._selMode) this._applyFilter();
   }
   _schema() {
+    const rep = !this._c || this._c.mute_hold !== true;   // hold to mute and hold to repeat exclude each other: the repeat options only without hold to mute
     return [
       { name: "entity", required: true, selector: { entity: { filter: [{ integration: "apple_tv", domain: "media_player" }] } } },
+      { name: "style", selector: { select: { mode: "dropdown", options: [{ value: "card", label: "Card" }, { value: "flat", label: "Flat (no border)" }, { value: "transparent", label: "Transparent (blends in)" }] } } },
       { name: "height", selector: { text: {} } },
       { name: "pad_ratio", selector: { number: { min: 0.8, max: 2.5, step: 0.05, mode: "slider" } } },
       { name: "", type: "grid", schema: [{ name: "sources", selector: { boolean: {} } }, { name: "app_switcher", selector: { boolean: {} } },
-                                         { name: "volume", selector: { boolean: {} } }, { name: "keyboard", selector: { boolean: {} } }, { name: "haptics", selector: { boolean: {} } }, { name: "show_border", selector: { boolean: {} } }] },
+                                         { name: "volume", selector: { boolean: {} } }, { name: "keyboard", selector: { boolean: {} } }, { name: "haptics", selector: { boolean: {} } }, { name: "keep_screen_on", selector: { boolean: {} } },] },
       { name: "settings_button", selector: { boolean: {} } },
-      { name: "mute_hold", selector: { boolean: {} } },
+      { name: "volume_entity", selector: { entity: { filter: [{ domain: "media_player" }] } } },
+      { name: "volume_slider", selector: { boolean: {} } },
+      { name: "", type: "grid", schema: [...(rep ? [{ name: "volume_repeat", selector: { boolean: {} } }] : []), { name: "mute_hold", selector: { boolean: {} } }, { name: "mute_button", selector: { boolean: {} } }] },
+      ...(rep && this._c.volume_repeat !== false ? [{ name: "", type: "grid", schema: [{ name: "volume_repeat_delay", selector: { number: { min: 150, max: 1500, step: 50, mode: "box", unit_of_measurement: "ms" } } }, { name: "volume_repeat_ms", selector: { number: { min: 80, max: 1000, step: 10, mode: "box", unit_of_measurement: "ms" } } }, { name: "volume_repeat_steps", selector: { number: { min: 1, max: 10, step: 1, mode: "box" } } }] }] : []),
+      { name: "mute_entity", selector: { entity: { filter: [{ domain: ["media_player", "remote", "button", "input_button", "script", "scene", "switch", "input_boolean"] }] } } },
+      { name: "mute_command", selector: { text: {} } },
       { name: "volume_row", selector: { select: { mode: "dropdown", options: [{ value: "bottom", label: "Below the buttons" }, { value: "top", label: "Above the touchpad" }] } } },
       { name: "nav_order", selector: { select: { mode: "dropdown", options: [{ value: "back,home,play", label: "Back, home, play" }, { value: "home,back,play", label: "Home, back, play" }, { value: "back,play,home", label: "Back, play, home" }, { value: "home,play,back", label: "Home, play, back" }, { value: "play,back,home", label: "Play, back, home" }, { value: "play,home,back", label: "Play, home, back" }] } } },
       { name: "power_position", selector: { select: { mode: "dropdown", options: [{ value: "top", label: "Top row" }, { value: "bottom", label: "Volume row" }] } } },
@@ -1342,7 +1472,6 @@ class AtvTouchpadEditor extends HTMLElement {
         { name: "screen_radius", selector: { object: {} } },
         { name: "idle_paused_apps", selector: { text: {} } },
         { name: "logo_text", selector: { text: {} } },
-        { name: "edge_arrows", selector: { boolean: {} } },
         { name: "circle_scrub", selector: { boolean: {} } },
         { name: "circle_turn", selector: { number: { min: 200, max: 4000, step: 100, mode: "slider" } } },
         { name: "circle_turn_apps", selector: { object: {} } },
@@ -1387,10 +1516,14 @@ class AtvTouchpadEditor extends HTMLElement {
         e.stopPropagation();
         const v = { ...e.detail.value }, out = { type: this._c.type || "custom:atv-touchpad" };
         Object.keys(v).forEach(k => { if (v[k] !== undefined && v[k] !== "" && !(Array.isArray(v[k]) && !v[k].length) && !(k in DEFAULTS && v[k] === DEFAULTS[k] && !(k in this._c))) out[k] = v[k]; });   // keep the YAML short: untouched defaults are not written
+        if (!("volume_slider" in this._c) && out.volume_slider === !!out.volume_entity) delete out.volume_slider;   // derived default (on with a volume player): not written untouched
+        if ("volume_slider" in out && !("volume_slider" in this._c) && this._prevVS !== undefined && out.volume_slider === this._prevVS) delete out.volume_slider;   // the shown default followed the volume player
+        delete out.show_border;   // replaced by style (cardStyle maps a legacy show_border: false to flat)
         this._c = out; this._emit(out);
+        const rs = [out.mute_hold, out.volume_repeat].join(); if (rs !== this._repSig) { this._repSig = rs; const a = this._schema(); this._form.schema = a.slice(0, a.findIndex(x => x.title === "App tiles")); }   // show / hide the repeat options
         if (this._sigE !== out.entity) { this._sigE = out.entity; this._renderList(); }
       };
-      const all = this._schema(), i = all.findIndex(x => x.title === "App tiles");
+      const all = this._schema(), i = all.findIndex(x => x.title === "App tiles"); this._repSig = [this._c.mute_hold, this._c.volume_repeat].join();
       this._form = this._mkForm(onChange); this._formB = this._mkForm(onChange);
       this._form.schema = all.slice(0, i); this._formB.schema = all.slice(i + 1);
       const sectionForm = this._mkForm(onChange); sectionForm.schema = all[i].schema; this._formS = sectionForm;
@@ -1402,6 +1535,8 @@ class AtvTouchpadEditor extends HTMLElement {
     this._sig = JSON.stringify(this._appNames()); this._sigE = this._c.entity;
     this._renderList();
     const d = { ...DEFAULTS, ...this._c };
+    if (d.volume_slider === undefined) d.volume_slider = !!d.volume_entity; this._prevVS = d.volume_slider;   // shown default of the slider follows the volume player
+    d.style = cardStyle(this._c);
     if (d.source_icons && !Array.isArray(d.source_icons)) d.source_icons = Object.entries(d.source_icons).map(([name, v]) => typeof v === "string" ? { name, icon: v } : { name, ...v });
     if (!Array.isArray(d.source_icons)) d.source_icons = [];
     this._form.data = this._formS.data = this._formB.data = d;

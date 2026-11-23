@@ -167,6 +167,23 @@ def companion_api(atv):
     return remote.api
 
 
+MUTE_HID = (0x0C, 0xE2)   # USB HID consumer page, Mute: the key the Siri Remote's mute button sends (the Apple TV passes it on over HDMI-CEC / IR)
+
+
+async def hid_press(atv, page: int, usage: int) -> bool:
+    """Press and release a HID key over the MRP channel (pyatv's own key list has no mute); False when there is no MRP link."""
+    from pyatv.const import Protocol
+    remote = atv.remote_control.get(Protocol.MRP)
+    proto = getattr(remote, "protocol", None)
+    if proto is None:
+        return False
+    from pyatv.protocols.mrp import messages
+    await proto.send(messages.send_hid_event(page, usage, True))
+    await asyncio.sleep(0.05)
+    await proto.send(messages.send_hid_event(page, usage, False))
+    return True
+
+
 def companion_key(atv) -> Callable[[str, bool], Any]:
     """Key down / key up towards the Apple TV. pyatv's public API only has whole presses (a 'hold' there is a fixed second), so this uses the
     Companion link's own key command; raises when there is no Companion link."""

@@ -60,7 +60,6 @@ entity: media_player.living_room_apple_tv
 source_rows: 4
 app_names: false        # icons only
 player_buttons: true    # 10 s back, info, 10 s forward
-edge_arrows: false      # every tap is select
 swipe_hold: false
 swipe_sensitivity: 1.5
 logo_text: tv
@@ -71,7 +70,7 @@ pad_ratio: 1.15
 side_padding: 0         # edge to edge: the card sits in a pop-up with its own frame
 top_padding: 0
 bottom_padding: 0
-show_border: false
+style: transparent
 ```
 
 ## How it works
@@ -81,8 +80,7 @@ show_border: false
 ### Touchpad
 
 Swipe = arrow keys, tap = select. Step distance depends on speed (`swipe_slow` / `swipe_fast` px per step), and commands are
-spaced at least `command_gap` ms apart because the Apple TV drops faster ones. With `edge_arrows` a tap near an edge sends
-that arrow. Swipes on the pad never reach the pop-up around it.
+spaced at least `command_gap` ms apart because the Apple TV drops faster ones. Swipes on the pad never reach the pop-up around it.
 
 **Swipe and hold** (`swipe_hold`): move ~30 px sideways and rest, and the arrow key is held until you lift (fast forward /
 rewind). Moving the finger further out or back steps the speed up or down; what a step means is per app (`hold_profiles`).
@@ -117,10 +115,21 @@ If an app ignores the seek, the bar is hidden for that app on that device.
 `player_buttons: true` adds Apple's Remote-app row to the bottom of the pad: rewind / info / fast forward. Tap = the Apple
 TV's own skip (`skip_seconds`), hold = rewind / fast forward until release. Info is a Down press.
 
-### Mute
+### Volume and mute
 
-There's no mute key on an Apple TV. Holding volume down (0.6 s) sets the volume to 0 and remembers the level; hold again
-to restore (`mute_hold`).
+By default the volume row has volume down / up and a mute button. Set `volume_entity` to the media player for volume
+(a soundbar or TV that reports its volume) and the two volume buttons become one volume button that opens a full-screen
+volume slider (`volume_slider`, default on with a volume player): drag up / down from the current level; a tap beside the
+bar closes it, and it closes 5 s after the last touch. `volume_slider: true` without a volume player uses the Apple TV's
+own volume, when it reports one (HomePods / AirPlay speakers).
+
+Without hold to mute, holding volume down / up keeps stepping the volume until you let go (`volume_repeat`): after `volume_repeat_delay` ms,
+`volume_repeat_steps` key presses every `volume_repeat_ms` ms. The size of one step is set by the TV or soundbar.
+
+The mute button sends the Siri Remote's mute key (HID over the MRP channel); the Apple TV passes it on to the TV or soundbar
+(HDMI-CEC / IR). Without an MRP link it sets the Apple TV's own volume to 0 and back. Or set `mute_entity` to the soundbar or TV (media player: mute toggles), its remote
+(sends `mute_command`, default `mute`), or a button, script or switch. The mute button in the volume row
+(`mute_button`) then mutes that instead. Holding volume down (0.6 s) mutes the same way (`mute_hold`, default off): the volume buttons then do not repeat.
 
 ### Keyboard
 
@@ -213,9 +222,10 @@ working, and the card shows *Touch scrubbing is not available* when the Companio
 | `side_padding` / `top_padding` / `bottom_padding` | `12` | Margins in px; `0` = none |
 | `screen_corners` | `true` | Bottom row follows rounded screen corners (iOS) |
 | `screen_radius` | built in | Corner radius in px: one number, or per screen size `{"402x874": 62}` |
-| `show_border` | `true` | `false` for pop-ups with their own frame |
+| `style` | `card` | `card`, `flat` (no border / shadow) or `transparent` (no background, see-through buttons: blends into a pop-up; theme var `--remote-surface` sets the button colour). Legacy `show_border: false` = `flat` |
 | `settings_button` | `true` | Cogwheel with quick settings |
 | `haptics` | `true` | Vibrate on taps |
+| `keep_screen_on` | `true` | Keep the phone/tablet screen on while the card is shown and the device is on |
 | `idle_paused_apps` | `[Netflix]` | Apps that report `idle` while paused; treated as paused |
 
 **App tiles**
@@ -242,7 +252,16 @@ working, and the card shows *Touch scrubbing is not available* when the Companio
 |---|---|---|
 | `nav_order` | `back,home,play` | Order of the bottom buttons |
 | `volume` | `true` | Volume buttons |
-| `mute_hold` | `true` | Hold volume down to mute |
+| `volume_entity` | | Media player for volume (soundbar / TV): its volume shows in the slider |
+| `volume_slider` | on with `volume_entity` | One volume button with a full-screen slider (needs a volume level); off = volume down / up |
+| `volume_repeat` | `true` | Hold volume to keep stepping (not with `mute_hold`) |
+| `volume_repeat_delay` | `400` | ms before the repeat starts |
+| `volume_repeat_ms` | `200` | ms between repeats |
+| `volume_repeat_steps` | `1` | Volume key presses per repeat |
+| `mute_button` | `true` | Mute button in the volume row |
+| `mute_entity` | | What mute acts on: media player, remote, button, script or switch; empty = the Apple TV (volume to 0 and back) |
+| `mute_command` | `mute` | Command sent when `mute_entity` is a remote |
+| `mute_hold` | `false` | Hold volume down to mute (the volume buttons then do not repeat) |
 | `app_switcher` | `true` | Double-press TV / Home |
 | `power_position` | `top` | `bottom` = power replaces the app switcher in the volume row |
 | `volume_row` | `bottom` | `top` = volume row above the pad |
@@ -251,7 +270,6 @@ working, and the card shows *Touch scrubbing is not available* when the Companio
 | `skip_seconds` | `10` | Seconds per skip |
 | `progress_bar` | `true` | Draggable progress bar (apps that report position) |
 | `show_time` | `true` | Position / duration on the pad |
-| `edge_arrows` | `true` | Arrows on the pad, tap near an edge = that arrow |
 | `logo_text` | — | Word after the Apple logo, e.g. `tv` |
 
 **Touchpad**
